@@ -1,4 +1,4 @@
-module parse(
+module msg_rx(
     input clk,
     input valid,
     input [7:0] data,

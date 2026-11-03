@@ -10,7 +10,7 @@ The design is verified in simulation, with a self-checking testbench for every m
 
 | Module | What it does | Status |
 |---|---|---|
-| `parse` | Turns the incoming byte stream into message fields | ✅ **Done and tested** |
+| `msg_rx` | Turns the incoming byte stream into message fields | ✅ **Done and tested** |
 | `order_table` | Remembers every open order (side, price, shares) by order ID | ⏳ Next |
 | `book_update` | Turns each message into a change at one price level | Planned |
 | `price_levels` | Total shares waiting at every price, for bids and asks | Planned |
@@ -19,7 +19,7 @@ The design is verified in simulation, with a self-checking testbench for every m
 | `top` | Connects everything and measures latency in clock cycles | Planned |
 
 ```
-bytes ─► parse ─► order_table ─► book_update ─► price_levels ─► best_price ─► tob_output ─► updates
+bytes ─► msg_rx ─► order_table ─► book_update ─► price_levels ─► best_price ─► tob_output ─► updates
 ```
 
 ---
@@ -39,13 +39,13 @@ To start with, every message is a fixed **18 bytes**, modelled on NASDAQ's ITCH 
 
 ---
 
-## The parser (`src/parse.v`)
+## The message receiver (`src/msg_rx.v`)
 
 Bytes arrive one per clock with a `valid` signal. A 5-bit counter tracks which byte of the message is arriving (0–17), and a `case` on the counter shifts each byte into its field: type, order ID, side, shares, price and new order ID. When byte 17 arrives, the counter resets and `msg_valid` goes high for exactly **one clock**, on the same edge that captures the last byte. The next module can use the message on the very next clock.
 
 ### Testing
 
-[`tests/tb_parse.v`](tests/tb_parse.v) is a self-checking testbench. It records every message it sends, compares each one the parser outputs field by field, and checks the timing of `msg_valid`.
+[`tests/tb_msg_rx.v`](tests/tb_msg_rx.v) is a self-checking testbench. It records every message it sends, compares each one the parser outputs field by field, and checks the timing of `msg_valid`.
 
 | Test | Checks |
 |---|---|
@@ -73,10 +73,10 @@ ALL TESTS PASSED  (411 messages checked)
 
 ### Run it yourself
 
-- **In the browser (nothing to install):** paste `tests/tb_parse.v` and `src/parse.v` into [EDA Playground](https://www.edaplayground.com), choose **Icarus Verilog**, and click **Run**.
+- **In the browser (nothing to install):** paste `tests/tb_msg_rx.v` and `src/msg_rx.v` into [EDA Playground](https://www.edaplayground.com), choose **Icarus Verilog**, and click **Run**.
 - **With Icarus Verilog:**
   ```bash
-  iverilog -g2005 -o sim tests/tb_parse.v src/parse.v
+  iverilog -g2005 -o sim tests/tb_msg_rx.v src/msg_rx.v
   vvp sim
   ```
 

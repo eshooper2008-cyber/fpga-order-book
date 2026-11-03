@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Self-checking testbench for parse.v (the 18-byte message parser).
+// Self-checking testbench for msg_rx.v (the 18-byte message parser).
 // Plain Verilog, so it runs on EDA Playground or any simulator.
 //
 // Message layout (big-endian):
@@ -10,7 +10,7 @@
 //   bytes 10-13 price (4 implied decimals: 501000 = $50.1000)
 //   bytes 14-17 new order ID (replace only)
 
-module tb_parse;
+module tb_msg_rx;
 
     // ---------------------------------------------------------------- DUT
     reg         clk = 0;
@@ -20,9 +20,9 @@ module tb_parse;
     wire [31:0] price, ID, qty, new_ID;
     wire [7:0]  msg_type, side;
 
-    // Connected by position (same order as the ports in parse.v), so this works
+    // Connected by position (same order as the ports in msg_rx.v), so this works
     // whether the port is called `type` or `msg_type`.
-    parse dut (clk, valid, data, msg_valid, price, msg_type, ID, side, qty, new_ID);
+    msg_rx dut (clk, valid, data, msg_valid, price, msg_type, ID, side, qty, new_ID);
 
     always #5 clk = ~clk;   // 10 ns clock
 
@@ -159,7 +159,7 @@ module tb_parse;
     integer n, e0;
     initial begin
         $dumpfile("dump.vcd");      // waveforms (EDA Playground: tick "Open EPWave after run")
-        $dumpvars(0, tb_parse);
+        $dumpvars(0, tb_msg_rx);
 
         idle(3);
 

@@ -1,0 +1,12 @@
+# Simulation output
+sim_build/
+*.vvp
+*.vcd
+
+# Python
+__pycache__/
+.pytest_cache/
+
+# OS junk
+.DS_Store
+Thumbs.db

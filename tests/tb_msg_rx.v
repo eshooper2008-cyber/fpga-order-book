@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 // Self-checking testbench for msg_rx.v (the 18-byte message parser).
+// Testbench written by Claude (Anthropic's AI assistant) to test Elliott's
+// msg_rx.v. The design itself is Elliott's own code.
 // Plain Verilog, so it runs on EDA Playground or any simulator.
 //
 // Message layout (big-endian):

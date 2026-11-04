@@ -1,5 +1,7 @@
 `timescale 1ns/1ps
 // Self-checking testbench for order_table.v (the open-order memory).
+// Testbench written by Claude (Anthropic's AI assistant) to test Elliott's
+// order_table.v. The design itself is Elliott's own code.
 // Plain Verilog, so it runs on EDA Playground or any simulator.
 //
 // The testbench keeps its own copy of the order table (the "model"). For every

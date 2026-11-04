@@ -4,6 +4,8 @@ A hardware order book written in **Verilog**: it reads a stream of market-data m
 
 The design is verified in simulation, with a self-checking testbench for every module.
 
+> **Who wrote what:** I write all of the Verilog modules in `src/`. The testbenches in `tests/` were written by Claude (Anthropic's AI assistant), only to test my code.
+
 ---
 
 ## Progress
@@ -44,7 +46,7 @@ Bytes arrive one per clock with a `valid` signal. A 5-bit counter tracks which b
 
 ### Testing
 
-[`tests/tb_msg_rx.v`](tests/tb_msg_rx.v) is a self-checking testbench. It records every message it sends, compares each one the parser outputs field by field, and checks the timing of `msg_valid`.
+[`tests/tb_msg_rx.v`](tests/tb_msg_rx.v) is a self-checking testbench (written by Claude to test my parser). It records every message it sends, compares each one the parser outputs field by field, and checks the timing of `msg_valid`.
 
 | Test | Checks |
 |---|---|
@@ -108,7 +110,7 @@ Every output appears one clock after the message.
 
 ### Testing
 
-[`tests/tb_order_table.v`](tests/tb_order_table.v) keeps its own copy of the order table. For every message it works out which change(s) should come out, checks each output, and compares the module's memory with its copy slot by slot.
+[`tests/tb_order_table.v`](tests/tb_order_table.v) (written by Claude to test my module) keeps its own copy of the order table. For every message it works out which change(s) should come out, checks each output, and compares the module's memory with its copy slot by slot.
 
 | Test | Checks |
 |---|---|
@@ -123,7 +125,7 @@ Every output appears one clock after the message.
 | Idle and unknown types | Nothing happens |
 | 3000 random messages | Random mix of all five types, with random gaps, against the model |
 
-**Result: all tests pass, with 3027 messages and 3481 outputs checked.** I also put back three bugs from earlier versions one at a time (wrong fully-filled check, replace using the message's side, replace sent as an add) to make sure the testbench catches each one.
+**Result: all tests pass, with 3027 messages and 3481 outputs checked.** Three bugs from earlier versions were also put back one at a time (wrong fully-filled check, replace using the message's side, replace sent as an add) to make sure the testbench catches each one.
 
 ```
 PASS  add buy and sell

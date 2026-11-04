@@ -11,15 +11,14 @@ The design is verified in simulation, with a self-checking testbench for every m
 | Module | What it does | Status |
 |---|---|---|
 | `msg_rx` | Turns the incoming byte stream into message fields | ✅ **Done and tested** |
-| `order_table` | Remembers every open order (side, price, shares) by order ID | ⏳ Next |
-| `book_update` | Turns each message into a change at one price level | Planned |
-| `price_levels` | Total shares waiting at every price, for bids and asks | Planned |
+| `order_table` | Remembers every open order (side, price, shares) by order ID | ✅ **Done and tested** |
+| `price_levels` | Total shares waiting at every price, for bids and asks | ⏳ Next |
 | `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | Planned |
 | `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | Planned |
 | `top` | Connects everything and measures latency in clock cycles | Planned |
 
 ```
-bytes ─► msg_rx ─► order_table ─► book_update ─► price_levels ─► best_price ─► tob_output ─► updates
+bytes ─► msg_rx ─► order_table ─► price_levels ─► best_price ─► tob_output ─► updates
 ```
 
 ---
@@ -82,9 +81,81 @@ ALL TESTS PASSED  (411 messages checked)
 
 ---
 
+## The order table (`src/order_table.v`)
+
+Execute, cancel, delete and replace messages only carry an order ID, not the side or price. To update the book, the hardware has to remember every open order. `order_table` stores each one in a 256-entry memory, using the low 8 bits of the order ID as the address:
+
+```
+ 71        64 63                 32 31                  0
+┌────────────┬─────────────────────┬─────────────────────┐
+│ side (8)   │ price (32)          │ shares (32)         │   one entry, 72 bits
+└────────────┴─────────────────────┴─────────────────────┘
+```
+
+An empty slot is all zeros. For each message it updates the entry and outputs one change for the next stage: *add or remove some shares, at this price, on this side*.
+
+| Message | Table | Output |
+|---|---|---|
+| Add | write `{side, price, shares}` | +shares at price |
+| Execute / Cancel | subtract the shares, clear the slot if none are left | −shares at the order's price |
+| Delete | clear the slot | −all remaining shares |
+| Replace | clear the old slot, write the new one (keeping the old side) | −old shares at old price, then **on the next clock** +new shares at new price |
+| Any of these on an unknown ID | nothing | `not_found` |
+
+A replace changes two price levels, but there is only one set of outputs, so the add is saved in `pending_data` and sent one clock later. Messages are at least 18 clocks apart, so that clock is always free.
+
+Every output appears one clock after the message.
+
+### Testing
+
+[`tests/tb_order_table.v`](tests/tb_order_table.v) keeps its own copy of the order table. For every message it works out which change(s) should come out, checks each output, and compares the module's memory with its copy slot by slot.
+
+| Test | Checks |
+|---|---|
+| Add buy and sell | Side decoded correctly, change goes out |
+| Execute partial then full | Shares go down, slot is cleared at 0, then `not_found` |
+| Cancel partial then full | Same for cancels |
+| Delete | All remaining shares removed, slot cleared |
+| Replace keeps side, two outputs | Removal then add on the next clock; new ID works, old ID is gone |
+| Replace into same ID | New order overwrites the old one correctly |
+| Unknown order | Execute, cancel, delete and replace all give `not_found` |
+| Max values | All-ones shares and price |
+| Idle and unknown types | Nothing happens |
+| 3000 random messages | Random mix of all five types, with random gaps, against the model |
+
+**Result: all tests pass, with 3027 messages and 3481 outputs checked.** I also put back three bugs from earlier versions one at a time (wrong fully-filled check, replace using the message's side, replace sent as an add) to make sure the testbench catches each one.
+
+```
+PASS  add buy and sell
+PASS  execute partial then full
+PASS  cancel partial then full
+PASS  delete
+PASS  replace keeps side, two outputs
+PASS  replace into same ID
+PASS  unknown order -> not_found
+PASS  max values
+PASS  idle and unknown types: no output
+PASS  3000 random messages vs model
+--------------------------------------------
+ALL TESTS PASSED  (3027 messages, 3481 outputs checked)
+```
+
+### Run it yourself
+
+```bash
+iverilog -g2005 -o sim tests/tb_order_table.v src/order_table.v
+vvp sim
+```
+
+Or paste both files into EDA Playground as above.
+
+**Current limits:** only 256 orders at once (IDs that share their low 8 bits would collide), and the memory is read in the same clock it's written, so it won't map onto block RAM yet. A hash of the order ID and a read-then-write pipeline come later.
+
+---
+
 ## Next steps
 
-1. **`order_table`:** store orders in block RAM so execute, cancel, delete and replace messages can find their order's side and price.
-2. Build the price levels and the one-cycle best bid/ask finder.
+1. **`price_levels`:** total shares at every price for bids and asks.
+2. Build the one-cycle best bid/ask finder.
 3. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
 4. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

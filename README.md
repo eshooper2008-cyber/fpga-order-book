@@ -225,6 +225,13 @@ vvp sim
 
 Or paste both files into EDA Playground as above.
 
+### Watching it work
+
+These two animations replay changes through the module and draw the totals it holds (the bars) and its bitmap bits. The numbers are read from a simulation of `price_levels`.
+
+- [`docs/ladder_slow.mp4`](docs/ladder_slow.mp4): 40 changes, one every 1.5 seconds, with a caption explaining each one (what was added or removed, the total before and after, and when a bitmap bit is set or cleared).
+- [`docs/ladder_fast.mp4`](docs/ladder_fast.mp4): 500 changes at 30 changes per second, no captions. The module accepts a change on every clock cycle, so in hardware it would run far faster than this.
+
 **Current limits:** the window is fixed (it does not re-centre as the market moves), and the share totals are not an output yet. Both are for later.
 
 ---

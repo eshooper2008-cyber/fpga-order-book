@@ -14,8 +14,8 @@ The design is verified in simulation, with a self-checking testbench for every m
 |---|---|---|
 | `msg_rx` | Turns the incoming byte stream into message fields | ✅ **Done and tested** |
 | `order_table` | Remembers every open order (side, price, shares) by order ID | ✅ **Done and tested** |
-| `price_levels` | Total shares waiting at every price, for bids and asks | ⏳ Next |
-| `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | Planned |
+| `price_levels` | Total shares waiting at every price, for bids and asks | ✅ **Done and tested** |
+| `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ⏳ Next |
 | `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | Planned |
 | `top` | Connects everything and measures latency in clock cycles | Planned |
 
@@ -155,9 +155,83 @@ Or paste both files into EDA Playground as above.
 
 ---
 
+## The price levels (`src/price_levels.v`)
+
+The order table reports each change as *add or remove some shares, at this price, on this side*. `price_levels` adds those changes up into a running total of shares waiting at every price, separately for buys and sells.
+
+It covers a window of **256 prices, one cent apart, starting at `BASE_PRICE`** (set to $100.00, so $100.00 to $102.55). A price is turned into a level number with:
+
+```
+level = (price - BASE_PRICE) / TICK        TICK = 100  (one cent, with 4 implied decimals)
+```
+
+Two things are kept for each side:
+
+- **Totals:** `buy_qty_map[0:255]` and `sell_qty_map[0:255]`, one 32-bit total per level.
+- **Bitmaps:** `buy_levels[255:0]` and `sell_levels[255:0]` (outputs), one bit per level. A bit is 1 while that level has shares and goes back to 0 when its total reaches zero. The next module only has to look at these bits to find the best bid and ask.
+
+| Input | Meaning |
+|---|---|
+| `change_side` | 0 = buy book, 1 = sell book |
+| `change_add` | 1 = add shares, 0 = remove shares |
+
+Two flags last exactly one clock: `out_of_range` (the price is outside the window, so the change is ignored) and `error` (removing more shares than the level holds, so the change is ignored). Everything else updates one clock after the change, and changes can arrive on consecutive clocks, which is what a replace sends.
+
+### Testing
+
+[`tests/tb_price_levels.v`](tests/tb_price_levels.v) (written by Claude to test my module) keeps its own total for every level on both sides. After every clock it checks all 256 totals and all 512 bitmap bits against its copy.
+
+| Test | Checks |
+|---|---|
+| Starts empty | Nothing set before any change |
+| Single add, bid and ask | Totals and bits for one buy and one sell |
+| Accumulate, partial remove, full remove | Totals add up, bit stays set until the level is empty |
+| First and last level | The edges of the window, both sides |
+| Bid and ask at the same price | The two sides do not affect each other |
+| Back-to-back changes | Remove then add on consecutive clocks, including the same level |
+| Max quantity | All-ones (`0xFFFFFFFF`) shares |
+| `change_valid` low | Inputs are ignored |
+| 5000 random changes | Random adds, cancels and executions against the model, with 0 to 2 idle clocks between them |
+| Drain the book | Remove everything, both bitmaps end at zero |
+| Out of range prices | Just below and above the window, far above, price 0: flagged and nothing changes |
+| Remove more than held | `error` is set and nothing changes |
+
+**Result: all tests pass, with 5478 changes and 8909 full-state checks.** Five deliberately broken versions of the module (the bitmap using the old total, sells reading the buy totals, removals ignored, `change_valid` ignored, and a bit that never clears) were also run to make sure the testbench catches each one.
+
+```
+  ok   starts empty
+  ok   single add, bid and ask
+  ok   accumulate, partial remove, full remove
+  ok   first and last level
+  ok   bid and ask at same price are independent
+  ok   back-to-back changes
+  ok   max quantity
+  ok   ignores inputs while change_valid is low
+  ok   5000 random changes vs model
+  ok   drain book to empty
+  ok   out of range prices rejected
+  ok   remove more than held sets error
+-----
+5478 changes, 8909 full-state checks, 0 errors
+ALL TESTS PASSED
+```
+
+### Run it yourself
+
+```bash
+iverilog -g2005 -o sim tests/tb_price_levels.v src/price_levels.v
+vvp sim
+```
+
+Or paste both files into EDA Playground as above.
+
+**Current limits:** the window is fixed (it does not re-centre as the market moves), and the share totals are not an output yet. Both are for later.
+
+---
+
 ## Next steps
 
-1. **`price_levels`:** total shares at every price for bids and asks.
-2. Build the one-cycle best bid/ask finder.
+1. **`best_price`:** build the one-cycle best bid/ask finder from the two bitmaps.
+2. Send a top-of-book update whenever the best bid or ask changes.
 3. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
 4. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

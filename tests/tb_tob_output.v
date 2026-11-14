@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// tb_tob_output.v  --  self-checking testbench for module `tob`
+// tb_tob_output.v  --  self-checking testbench for module `tob_output`
 //
 // Written by Claude only to test Elliott's tob module (src/tob_output.v).
 // Plain Verilog-2005: run in EDA Playground (Icarus Verilog) or with
@@ -9,7 +9,7 @@
 //   It watches the best bid and best ask coming out of `best` and pulses
 //   best_change whenever either of them changes.
 //
-//   module tob(
+//   module tob_output(
 //       input      clk,
 //       input [7:0] buy_index,     // from best: best bid level
 //       input [7:0] sell_index,    // from best: best ask level
@@ -44,7 +44,7 @@ module tb_tob_output;
     reg        no_sell    = 1'b1;
     wire       best_change;
 
-    tob dut (
+    tob_output dut (
         .clk         (clk),
         .buy_index   (buy_index),
         .sell_index  (sell_index),

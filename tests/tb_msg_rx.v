@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-// Self-checking testbench for msg_rx.v (the 18-byte message parser; the module inside is called `parse`).
+// Self-checking testbench for msg_rx.v (the 18-byte message parser).
 // Testbench written by Claude (Anthropic's AI assistant) to test Elliott's
 // msg_rx.v. The design itself is Elliott's own code.
 // Plain Verilog, so it runs on EDA Playground or any simulator.
@@ -23,7 +23,7 @@ module tb_msg_rx;
     wire [7:0]  msg_type, side;
 
     // Connected by position (same order as the ports in msg_rx.v).
-    parse dut (clk, valid, data, msg_valid, price, msg_type, ID, side, qty, new_ID);
+    msg_rx dut (clk, valid, data, msg_valid, price, msg_type, ID, side, qty, new_ID);
 
     always #5 clk = ~clk;   // 10 ns clock
 

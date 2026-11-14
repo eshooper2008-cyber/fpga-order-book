@@ -17,7 +17,7 @@ The design is verified in simulation, with a self-checking testbench for every m
 | `price_levels` | Total shares waiting at every price, for bids and asks | ✅ **Done and tested** |
 | `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ✅ **Done and tested** |
 | `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | ✅ **Done and tested** |
-| `top` | Connects everything and measures latency in clock cycles | 🔧 Wired together and compiles, end-to-end test next |
+| `top` | Connects everything and measures latency in clock cycles | ✅ **Done and tested** |
 
 ```
 bytes ─► msg_rx ─► order_table ─► price_levels ─► best_price ─► tob_output ─► updates
@@ -43,8 +43,6 @@ To start with, every message is a fixed **18 bytes**, modelled on NASDAQ's ITCH 
 ## The message receiver (`src/msg_rx.v`)
 
 Bytes arrive one per clock with a `valid` signal. A 5-bit counter tracks which byte of the message is arriving (0–17), and a `case` on the counter shifts each byte into its field: type, order ID, side, shares, price and new order ID. When byte 17 arrives, the counter resets and `msg_valid` goes high for exactly **one clock**, on the same edge that captures the last byte. The next module can use the message on the very next clock.
-
-The module inside `src/msg_rx.v` is called `parse`, and its message type output is called `msg_type`, so the names match the next module and `top`.
 
 ### Testing
 
@@ -245,7 +243,7 @@ These two animations replay changes through the module and draw the totals it ho
 
 ## The best price finder (`src/best_price.v`)
 
-`price_levels` keeps one bit per price level: 1 while that level has shares. `best_price` reads those two bitmaps and picks the **best bid** and the **best ask**. The module inside the file is called `best`.
+`price_levels` keeps one bit per price level: 1 while that level has shares. `best_price` reads those two bitmaps and picks the **best bid** and the **best ask**.
 
 - **Best bid** (`buy_index`): the **highest** price level with shares. It is the highest set bit of `buy_levels`.
 - **Best ask** (`sell_index`): the **lowest** price level with shares. It is the lowest set bit of `sell_levels`.
@@ -301,7 +299,7 @@ This animation replays 14 changes to the two bitmaps and shows what `best_price`
 
 ## The top-of-book output (`src/tob_output.v`)
 
-`best_price` gives the best bid and best ask for the current state of the book. `tob_output` watches them and pulses `best_change` for one clock whenever either one changes. The module inside the file is called `tob`.
+`best_price` gives the best bid and best ask for the current state of the book. `tob_output` watches them and pulses `best_change` for one clock whenever either one changes.
 
 It keeps a copy of the last best bid and best ask it saw, and the last empty/non-empty state of each side. Every clock it compares them with the inputs:
 
@@ -362,12 +360,41 @@ Or paste both files into EDA Playground as above.
 - `order_table`'s price-level change goes into `price_levels`, whose two bitmaps go into `best_price`, and its outputs go into `tob_output`.
 - `not_found`, `out_of_range` and `error` are wired up inside `top` but not brought out as outputs yet.
 
-**Not tested yet:** `top` compiles together with the other modules, but it does not have its own testbench. The latency in clock cycles has not been measured.
+**Latency:** `best_change` goes high 3 clock edges after the edge that captures the last byte of a message. A replace message changes two price levels, so it can give a second pulse one clock later.
+
+### Testing
+
+[`tests/tb_top.v`](tests/tb_top.v) (written by Claude to test my modules working together) sends messages into `top` one byte per clock, keeping its own model of the whole book: the order table, the shares at every price level, and the best bid and ask. For every message it works out which clock `best_change` should pulse on and what the best bid and ask should be, and checks `top` against that. It also counts the `not_found` and `out_of_range` flags inside `top` and checks that `error` never goes high.
+
+| Test | Checks |
+|---|---|
+| Bid or ask appears, improves, or empties | Right pulse and right best price each time |
+| More shares or a partial cancel on the best level | No pulse |
+| Replace | Two changes one clock apart |
+| Prices outside the window | Ignored, no pulse |
+| Unknown order IDs | `not_found`, no pulse |
+| Back-to-back messages with no idle clocks | Nothing missed |
+| 3,000 random messages and then emptying the whole book | Everything against the model, with a thin book (best prices change often) and a deeper one |
+
+**Result: all tests pass, with 3,046 messages, 59,410 clocks and 676 `best_change` pulses checked.** Broken versions were also run to make sure the testbench catches them: wrong wiring (`valid`, side, add flag, price, best bid and ask swapped), an extra clock of delay, a wrong best price in `best_price`, `tob_output` missing flag changes, a flipped side in `order_table`, an off-by-one price range in `price_levels` and a wrong byte order in `msg_rx`.
+
+```
+top testbench: 3046 messages, 59410 clocks, 676 best_change pulses checked
+PASS: no errors
+```
+
+### Run it yourself
+
+```bash
+iverilog -g2005 -o sim tests/tb_top.v src/*.v
+vvp sim
+```
+
+In EDA Playground, put `tests/tb_top.v` in the testbench pane and every file from `src/` in the design pane.
 
 ---
 
 ## Next steps
 
-1. **`top`:** test the whole chain end to end (the modules are connected and compile).
-2. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
-3. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.
+1. Synthesize to get resource use and maximum clock speed, and move `order_table` to block RAM.
+2. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

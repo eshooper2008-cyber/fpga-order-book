@@ -30,7 +30,7 @@ wire out_of_range;
 wire error;
 
 
-    parse parse(
+    msg_rx msg_rx(
 
         .clk (clk),
         .valid (valid),
@@ -71,7 +71,7 @@ wire error;
         .out_of_range (out_of_range),
         .error (error)
     );
-    best best(
+    best_price best_price(
         .buy_levels (buy_levels),
         .sell_levels (sell_levels),
         .buy_index (buy_index),
@@ -79,7 +79,7 @@ wire error;
         .no_sell (no_sell),
         .no_buy (no_buy)
     );
-    tob tob(
+    tob_output tob_output(
         .clk (clk),
         .buy_index (buy_index),
         .sell_index (sell_index),

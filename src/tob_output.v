@@ -1,4 +1,4 @@
-module tob(
+module tob_output(
     input clk,
     input [7:0] buy_index,
     input [7:0] sell_index,

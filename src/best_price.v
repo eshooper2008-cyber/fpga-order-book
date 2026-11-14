@@ -1,4 +1,4 @@
-module best(
+module best_price(
     input [255:0] buy_levels,
     input [255:0] sell_levels,
     output reg [7:0] buy_index,

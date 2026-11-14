@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// tb_best_price.v  --  self-checking testbench for module `best`
+// tb_best_price.v  --  self-checking testbench for module `best_price`
 //
 // Written by Claude only to test Elliott's best module (src/best_price.v).
 // Plain Verilog-2005: run in EDA Playground (Icarus Verilog) or with
@@ -23,7 +23,7 @@ module tb_best_price;
     wire         no_sell;
     wire         no_buy;
 
-    best dut (
+    best_price dut (
         .buy_levels  (buy_levels),
         .sell_levels (sell_levels),
         .buy_index   (buy_index),

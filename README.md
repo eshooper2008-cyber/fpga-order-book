@@ -355,5 +355,5 @@ Or paste both files into EDA Playground as above.
 ## Next steps
 
 1. **`top`:** connect everything and check the whole chain end to end.
-3. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
-4. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.
+2. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
+3. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

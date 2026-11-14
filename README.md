@@ -16,8 +16,8 @@ The design is verified in simulation, with a self-checking testbench for every m
 | `order_table` | Remembers every open order (side, price, shares) by order ID | ✅ **Done and tested** |
 | `price_levels` | Total shares waiting at every price, for bids and asks | ✅ **Done and tested** |
 | `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ✅ **Done and tested** |
-| `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | ⏳ Next |
-| `top` | Connects everything and measures latency in clock cycles | Planned |
+| `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | ✅ **Done and tested** |
+| `top` | Connects everything and measures latency in clock cycles | ⏳ Next |
 
 ```
 bytes ─► msg_rx ─► order_table ─► price_levels ─► best_price ─► tob_output ─► updates
@@ -297,9 +297,63 @@ This animation replays 14 changes to the two bitmaps and shows what `best_price`
 
 ---
 
+## The top-of-book output (`src/tob_output.v`)
+
+`best_price` gives the best bid and best ask for the current state of the book. `tob_output` watches them and pulses `best_change` for one clock whenever either one changes. The module inside the file is called `tob`.
+
+It keeps a copy of the last best bid and best ask it saw, and the last empty/non-empty state of each side. Every clock it compares them with the inputs:
+
+- A side going **empty**, or coming back, is a change.
+- A different **index** is a change.
+- Nothing is sent if the book stayed the same, and an empty book at start-up sends nothing.
+
+| Port | Meaning |
+|---|---|
+| `buy_index`, `sell_index` | Best bid and best ask level from `best_price` |
+| `no_buy`, `no_sell` | 1 when that side is empty |
+| `best_change` | 1 for exactly one clock, one clock after a change |
+
+### Testing
+
+[`tests/tb_tob_output.v`](tests/tb_tob_output.v) (written by Claude to test my module) keeps its own copy of the last reported book and works out on every clock whether `best_change` should be high. It also checks that the output only changes on a clock edge. Like the real `best_price`, it never moves an index while that side is empty, so it only checks realistic inputs.
+
+| Test | Checks |
+|---|---|
+| Empty book | No pulse at start-up or while it stays empty |
+| Bid or ask appears | One pulse, and none while it stays the same |
+| Best bid or best ask improves or worsens | One pulse for each move |
+| No change | No pulse |
+| Both change at once | One pulse |
+| Changes on consecutive clocks | One pulse per clock |
+| Change and change back | Two pulses |
+| A side empties and returns | Pulse each way, including coming back at the same index |
+| Both sides empty | One pulse, then none |
+| Index 0 and 255 | Real prices, not "empty" |
+| Every bid and every ask index | A pulse for each new index |
+| Random changes, held for random lengths, and 20,000 clocks of realistic traffic | Against the model |
+
+**Result: all tests pass, with 28,418 clocks and 10,976 changes checked.** Eight broken versions were also run to make sure the testbench catches them: pulsing on every clock, pulse not registered, one extra clock of delay, a two-clock pulse, ignoring the bid side, ignoring the ask side, ignoring empty/non-empty changes, and the wrong start-up state.
+
+```
+tob testbench: 28418 clocks checked, 10976 changes expected
+PASS: no errors
+```
+
+### Run it yourself
+
+```bash
+iverilog -g2005 -o sim tests/tb_tob_output.v src/tob_output.v
+vvp sim
+```
+
+Or paste both files into EDA Playground as above.
+
+**Current limit:** it only pulses. The new best bid and ask are not sent with the pulse yet, so the next stage reads them from `best_price`.
+
+---
+
 ## Next steps
 
-1. **`tob_output`:** send a top-of-book update whenever the best bid or ask changes.
-2. Connect everything in `top`.
+1. **`top`:** connect everything and check the whole chain end to end.
 3. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
 4. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

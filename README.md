@@ -17,7 +17,7 @@ The design is verified in simulation, with a self-checking testbench for every m
 | `price_levels` | Total shares waiting at every price, for bids and asks | ✅ **Done and tested** |
 | `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ✅ **Done and tested** |
 | `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | ✅ **Done and tested** |
-| `top` | Connects everything and measures latency in clock cycles | ⏳ Next |
+| `top` | Connects everything and measures latency in clock cycles | 🔧 Wired together and compiles, end-to-end test next |
 
 ```
 bytes ─► msg_rx ─► order_table ─► price_levels ─► best_price ─► tob_output ─► updates
@@ -43,6 +43,8 @@ To start with, every message is a fixed **18 bytes**, modelled on NASDAQ's ITCH 
 ## The message receiver (`src/msg_rx.v`)
 
 Bytes arrive one per clock with a `valid` signal. A 5-bit counter tracks which byte of the message is arriving (0–17), and a `case` on the counter shifts each byte into its field: type, order ID, side, shares, price and new order ID. When byte 17 arrives, the counter resets and `msg_valid` goes high for exactly **one clock**, on the same edge that captures the last byte. The next module can use the message on the very next clock.
+
+The module inside `src/msg_rx.v` is called `parse`, and its message type output is called `msg_type`, so the names match the next module and `top`.
 
 ### Testing
 
@@ -352,8 +354,20 @@ Or paste both files into EDA Playground as above.
 
 ---
 
+## The top level (`src/top.v`)
+
+`top` connects all the modules in the order shown in the diagram above. Bytes come in on `data` with `valid`, and out come the best bid and ask (`buy_index`, `sell_index`, `no_buy`, `no_sell`) plus the `best_change` pulse.
+
+- `msg_valid` from the message receiver goes into `order_table`'s `valid`, so the order table only acts on a whole message and not on every byte.
+- `order_table`'s price-level change goes into `price_levels`, whose two bitmaps go into `best_price`, and its outputs go into `tob_output`.
+- `not_found`, `out_of_range` and `error` are wired up inside `top` but not brought out as outputs yet.
+
+**Not tested yet:** `top` compiles together with the other modules, but it does not have its own testbench. The latency in clock cycles has not been measured.
+
+---
+
 ## Next steps
 
-1. **`top`:** connect everything and check the whole chain end to end.
+1. **`top`:** test the whole chain end to end (the modules are connected and compile).
 2. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
 3. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

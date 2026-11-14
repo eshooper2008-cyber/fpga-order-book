@@ -1,10 +1,10 @@
-module msg_rx(
+module parse(
     input clk,
     input valid,
     input [7:0] data,
     output reg msg_valid,
     output reg [31:0] price,
-    output reg [7:0] type,
+    output reg [7:0] msg_type,
     output reg [31:0] ID,
     output reg [7:0] side,
     output reg [31:0] qty,
@@ -20,7 +20,7 @@ always @(posedge clk) begin
     if(valid) begin       
         case(index)
             5'd0: begin 
-                type <= data;
+                msg_type <= data;
             end 
             5'd1: begin 
                 ID <= {ID[23:0], data};

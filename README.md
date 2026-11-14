@@ -15,8 +15,8 @@ The design is verified in simulation, with a self-checking testbench for every m
 | `msg_rx` | Turns the incoming byte stream into message fields | ✅ **Done and tested** |
 | `order_table` | Remembers every open order (side, price, shares) by order ID | ✅ **Done and tested** |
 | `price_levels` | Total shares waiting at every price, for bids and asks | ✅ **Done and tested** |
-| `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ⏳ Next |
-| `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | Planned |
+| `best_price` | Finds the best bid and ask in one cycle (bitmap + priority encoder) | ✅ **Done and tested** |
+| `tob_output` | Sends a top-of-book update whenever the best bid or ask changes | ⏳ Next |
 | `top` | Connects everything and measures latency in clock cycles | Planned |
 
 ```
@@ -241,9 +241,59 @@ These two animations replay changes through the module and draw the totals it ho
 
 ---
 
+## The best price finder (`src/best_price.v`)
+
+`price_levels` keeps one bit per price level: 1 while that level has shares. `best_price` reads those two bitmaps and picks the **best bid** and the **best ask**. The module inside the file is called `best`.
+
+- **Best bid** (`buy_index`): the **highest** price level with shares. It is the highest set bit of `buy_levels`.
+- **Best ask** (`sell_index`): the **lowest** price level with shares. It is the lowest set bit of `sell_levels`.
+- **Empty book:** `no_buy` or `no_sell` is 1 when that side has no shares at all, and the matching index should be ignored.
+
+The module is purely combinational (no clock), so the answer follows the bitmaps straight away and the next stage can register it. A `for` loop over all 256 levels tracks whether a set bit has already been found (`buy_change`, `sell_change`), so only the first one counts. It is written as a loop to keep it short, and synthesis turns it into a priority encoder.
+
+| Port | Meaning |
+|---|---|
+| `buy_levels`, `sell_levels` | The 256-bit bitmaps from `price_levels` |
+| `buy_index`, `sell_index` | Level number of the best bid and best ask |
+| `no_buy`, `no_sell` | 1 when that side is empty |
+
+### Testing
+
+[`tests/tb_best_price.v`](tests/tb_best_price.v) (written by Claude to test my module) works out the right answer for every input with its own loop and compares. An index is only checked while its `no_*` flag is 0.
+
+| Test | Checks |
+|---|---|
+| Empty book | Both flags set |
+| Single level, buy only and sell only | Each side works on its own |
+| First and last level | The edges of the window, both sides |
+| Several levels | Best bid is the highest, best ask the lowest |
+| Best level empties | The next best level takes over, flags set when a side runs out |
+| Empty then non-empty | Flags go back to 0 (not stuck at 1) |
+| All ones, walking one, walking zero | Every position, both sides |
+| Every single buy and sell pair | 65,536 combinations |
+| Random bitmaps and random single-level edits | Many densities, against the model |
+
+**Result: all tests pass, with 72,075 input combinations checked.** Broken versions were also run to make sure the testbench catches them: best bid taking the lowest level, best ask taking the highest, skipping level 0 or level 255, the two flags swapped, a flag that gets stuck, and an early draft where the flags were never reset.
+
+```
+best testbench: 72075 input combinations checked
+PASS: no errors
+```
+
+### Run it yourself
+
+```bash
+iverilog -g2005 -o sim tests/tb_best_price.v src/best_price.v
+vvp sim
+```
+
+Or paste both files into EDA Playground as above.
+
+---
+
 ## Next steps
 
-1. **`best_price`:** build the one-cycle best bid/ask finder from the two bitmaps.
-2. Send a top-of-book update whenever the best bid or ask changes.
+1. **`tob_output`:** send a top-of-book update whenever the best bid or ask changes.
+2. Connect everything in `top`.
 3. Measure latency in clock cycles, then synthesize to get resource use and maximum clock speed.
 4. Later: support real NASDAQ ITCH 5.0 messages, and start processing a message before it has fully arrived (cut-through) to cut latency.

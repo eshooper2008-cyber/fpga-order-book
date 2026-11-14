@@ -289,6 +289,12 @@ vvp sim
 
 Or paste both files into EDA Playground as above.
 
+### Watching it work
+
+This animation replays 14 changes to the two bitmaps and shows what `best_price` reports after each one: the best bid, the best ask, and the `no_buy` / `no_sell` flags. The arrows that sweep down and up are only there to show what "the first 1 from the top (or bottom)" means. In hardware, all the levels are checked at the same time. The values are read from a simulation of `best_price`, and the picture shows 32 of the module's 256 levels. [Full quality video](docs/best_price.mp4).
+
+![best_price animation](docs/best_price.gif)
+
 ---
 
 ## Next steps

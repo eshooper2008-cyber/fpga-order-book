@@ -4,6 +4,8 @@ A hardware order book written in **Verilog**: it reads a stream of market-data m
 
 The design is verified in simulation, with a self-checking testbench for every module.
 
+**Timing: 21 clock cycles from the first byte of a message to the top-of-book update.** That is 18 clocks to receive the 18-byte message, plus just **3 clocks** of processing after the last byte arrives. See [Timing](#timing).
+
 > **Who wrote what:** I write all of the Verilog modules in `src/`. The testbenches in `tests/` were written by Claude (Anthropic's AI assistant), only to test my code.
 
 ---
@@ -37,6 +39,34 @@ To start with, every message is a fixed **18 bytes**, modelled on NASDAQ's ITCH 
 | 6 – 9 | Shares | add, execute, cancel, replace |
 | 10 – 13 | Price | add, replace |
 | 14 – 17 | New order ID | replace |
+
+---
+
+## Timing
+
+Everything below is counted in clock cycles. The clock speed in MHz will only be known once the design is synthesized, so these numbers don't depend on it. Edge 0 is the clock edge that captures the **last byte** of a message.
+
+| Clock edge | Module | What happens |
+|---|---|---|
+| −17 … 0 | `msg_rx` | One byte arrives per clock. Edge 0 captures byte 17 |
+| 0 | `msg_rx` | `msg_valid` goes high: the whole message is ready |
+| 1 | `order_table` | `change_valid` goes high with the price-level change |
+| 2 | `price_levels` | The bitmaps update. `best_price` has no clock, so the new best bid and ask show up on `top`'s outputs straight away |
+| 3 | `tob_output` | `best_change` goes high for one clock |
+
+| Measure | Clocks |
+|---|---|
+| Receive a message (one byte per clock) | 18 |
+| Last byte to the new best bid and ask on the outputs | 2 |
+| Last byte to `best_change` | 3 |
+| **First byte to `best_change`** | **21** |
+| Replace message: last byte to its second `best_change` | 4 |
+| New message accepted every | 18 |
+
+- **Replace** messages change two price levels (remove the old order, add the new one), so the second change comes one clock after the first: the bitmaps are final after edge 3, and a second `best_change` pulse can follow at edge 4.
+- **Throughput:** a message is processed in 3 clocks after its last byte, far less than the 18 clocks the next message takes to arrive. So the pipeline never holds more than one message, and messages can come back to back with no idle clocks between them.
+- **Where the time goes:** 18 of the 21 clocks are spent just receiving the message, one byte at a time. Starting to work before the whole message has arrived (cut-through, see [Next steps](#next-steps)) is the biggest possible latency saving.
+- **How it was measured:** [`tests/tb_top.v`](tests/tb_top.v) checks these exact clock edges for every message: `best_change` must be high on the right edge and low on all others, and the best bid and ask must be right. A version with one extra clock of delay fails it.
 
 ---
 
@@ -360,7 +390,7 @@ Or paste both files into EDA Playground as above.
 - `order_table`'s price-level change goes into `price_levels`, whose two bitmaps go into `best_price`, and its outputs go into `tob_output`.
 - `not_found`, `out_of_range` and `error` are wired up inside `top` but not brought out as outputs yet.
 
-**Latency:** `best_change` goes high 3 clock edges after the edge that captures the last byte of a message. A replace message changes two price levels, so it can give a second pulse one clock later.
+**Latency:** `best_change` goes high 3 clock edges after the edge that captures the last byte of a message, which is 21 clocks after its first byte. A replace message changes two price levels, so it can give a second pulse one clock later. The full breakdown is in [Timing](#timing).
 
 ### Testing
 
